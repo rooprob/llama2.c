@@ -8,7 +8,6 @@ Then run with:
 $ ./convert model.bin bemodel.bin
 */
 
-#include <arpa/inet.h>
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -16,6 +15,19 @@ $ ./convert model.bin bemodel.bin
 #include <sys/time.h>
 #include <time.h>
 // ----------------------------------------------------------------------------
+int ibyteswap(int i) {
+    union {
+        int i;
+        char b[4];
+    } src, dst;
+
+    src.i = i;
+    dst.b[3] = src.b[0];
+    dst.b[2] = src.b[1];
+    dst.b[1] = src.b[2];
+    dst.b[0] = src.b[3];
+    return dst.i;
+}
 // Transformer and RunState structs, and related memory management
 
 typedef struct {
@@ -29,14 +41,25 @@ typedef struct {
 } Config;
 
 void convert_config(Config* p, Config* c) {
-    c->dim = htonl(p->dim);
-    c->hidden_dim = htonl(p->hidden_dim);
-    c->n_layers = htonl(p->n_layers);
-    c->n_heads = htonl(p->n_heads);
-    c->n_kv_heads = htonl(p->n_kv_heads);
-    c->vocab_size = htonl(p->vocab_size);
-    c->seq_len = htonl(p->seq_len);
+    c->dim = ibyteswap(p->dim);
+    c->hidden_dim = ibyteswap(p->hidden_dim);
+    c->n_layers = ibyteswap(p->n_layers);
+    c->n_heads = ibyteswap(p->n_heads);
+    c->n_kv_heads = ibyteswap(p->n_kv_heads);
+    c->vocab_size = ibyteswap(p->vocab_size);
+    c->seq_len = ibyteswap(p->seq_len);
 }
+
+void print_config(Config* p) {
+    printf("dim: %d\n", p->dim);
+    printf("hidden_dim: %d\n", p->hidden_dim);
+    printf("n_layers: %d\n", p->n_layers);
+    printf("n_heads: %d\n", p->n_heads);
+    printf("n_kv_heads: %d\n", p->n_kv_heads);
+    printf("vocab_size: %d\n", p->vocab_size);
+    printf("seq_len: %d\n", p->seq_len);
+}
+
 
 typedef struct {
     // token embedding table
@@ -232,8 +255,8 @@ int main(int argc, char* argv[]) {
             return 1;
         }
         // read in the Transformer weights
-        malloc_weights(&weights, &config);
-        if (convert_weights(&weights, &config, file, cfile)) {
+        malloc_weights(&weights, &cconfig);
+        if (convert_weights(&weights, &cconfig, file, cfile)) {
             printf("error: converting weights\n");
             return 1;
         }
