@@ -14,6 +14,8 @@ $ ./run
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+#include <math.h>
+
 #if defined _WIN32
 #include "win.h"
 #else

@@ -4,12 +4,12 @@ CC = gcc
 
 .PHONY: convert
 convert: convert.c
-	$(CC) -O3 -o convert conver.c
+	cc -mips4 -r10000 -O3 -Ofast -c99 -o convert convert.c 
 
 .PHONY: r10k
 r10k: run.c
-	cc -mips4 -r10000 -O3 -Ofast -c99 -o run run.c
-	cc -mips4 -r10000 -O3 -Ofast -c99 -o -g grun run.c
+	cc -mips4 -r10000 -O3 -Ofast -c99 -o run run.c -lm
+	cc -mips4 -r10000 -O3 -Ofast -c99 -g -o grun run.c -lm
 
 	
 # the most basic way of building that is most likely to work on most systems

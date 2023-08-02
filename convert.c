@@ -119,6 +119,8 @@ float* fabyteswap(float* f, int size) {
     for (int idx = 0; idx < size; idx++) {
         f[idx] = fbyteswap(f[idx]);
     }
+
+    return f;
 }
 
 int convert_weights(TransformerWeights* w, Config* p, FILE* f, FILE* c) {
