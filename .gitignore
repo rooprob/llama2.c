@@ -1,0 +1,7 @@
+*.swp*
+test*/
+ex_*
+core
+*.bin
+run
+convert

@@ -1,15 +1,14 @@
 # choose your compiler, e.g. gcc/clang
 # example override to clang: make run CC=clang
-CC = gcc
+CC = /usr/bin/cc
 
 .PHONY: convert
 convert: convert.c
-	cc -mips4 -r10000 -O3 -Ofast -c99 -o convert convert.c 
+	$(CC) -mips4 -r10000 -O3 -c99 -o convert convert.c 
 
 .PHONY: r10k
 r10k: run.c
-	cc -mips4 -r10000 -O3 -Ofast -c99 -o run run.c -lm
-	cc -mips4 -r10000 -O3 -Ofast -c99 -g -o grun run.c -lm
+	$(CC) -mips4 -r10000 -O3 -Ofast -c99 -o run run.c -lm
 
 	
 # the most basic way of building that is most likely to work on most systems

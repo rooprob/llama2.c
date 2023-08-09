@@ -15,7 +15,13 @@ $ ./convert model.bin bemodel.bin
 #include <sys/time.h>
 #include <time.h>
 // ----------------------------------------------------------------------------
-int ibyteswap(int i) {
+static unsigned long ibyteswap(unsigned long x)
+{
+        return ((x << 24) | ((x & 0xff00) << 8) | ((x >> 8) & 0xff00)
+                | (x >> 24));
+}
+
+int xibyteswap(int i) {
     union {
         int i;
         char b[4];

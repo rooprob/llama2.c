@@ -8,13 +8,14 @@ Then run with:
 $ ./run
 */
 
+#include <assert.h>
 #include <fcntl.h>
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
-#include <math.h>
+#include <cblas.h>
 
 #if defined _WIN32
 #include "win.h"
@@ -34,6 +35,16 @@ typedef struct {
     int vocab_size;  // vocabulary size, usually 256 (byte-level)
     int seq_len;     // max sequence length
 } Config;
+
+void print_config(Config *c) {
+        printf("config: dim: %d\n", c->dim);
+        printf("config: hidden_dim: %d\n", c->hidden_dim);
+        printf("config: n_layers: %d\n", c->n_layers);
+        printf("config: n_heads: %d\n", c->n_heads);
+        printf("config: n_kv_heads: %d\n", c->n_kv_heads);
+        printf("config: vocab_size: %d\n", c->vocab_size);
+        printf("config: seq_len: %d\n", c->seq_len);
+}
 
 typedef struct {
     // token embedding table
@@ -205,17 +216,234 @@ void softmax(float* x, int size) {
     }
 }
 
-void matmul(float* xout, float* x, float* w, int n, int d) {
+void debugmatmul(float* xout, float* x, float* w, int n, int d) {
+        // W (d,n) @ x (n,) -> xout (d,)
+        // by far the most amount of time is spent inside this little function
+        int i;
+
+        printf("matmul: w(%d x %d) @ x(%d x 1) -> xout(%d,1)\n", d, n, n, d);
+        for (i = 0; i < d; i++) {
+                float val = 0.0f;
+                for (int j = 0; j < n; j++) {
+                        val += w[i * n + j] * x[j];
+                        //printf("accumulating: %d,%d w[%d] * x[%d] = %f * %f =  %f\n", i, j, i*n+j, j, w[i*n+j], x[j], val);
+                }
+                xout[i] = val;
+        }
+
+}
+
+void dot_matmul(float* xout, float* x, float* w, int n, int d) {
+        // matrix n x d
+        // w (n x d) * x (n)
+        int i;
+        float *ai;
+        //printf("dot: outer limt %d, inner %d\n", d, n);
+        // columns (d)
+        for (i = 0; i < d; i++) {
+                ai = &(w[i*n]);
+                // elements in vecor
+                // vector
+                // stride
+                // vector
+                // stride
+                // rows (n)
+                xout[i] = cblas_sdot(n,ai,1,x,1);
+                //printf("xout[%d]: %f\n", i, xout[i]);
+        }
+}
+
+void axpy_blas_matmul(float* xout, float* x, float* w, int n, int d) {
+        // matrix n x d
+        // w (n x d) * x (n)
+
+        //printf("matmul w (%d x %d) * x (%d)\n", n, d, n);
+        // init rows
+        for (int i=0; i<d ; i++) {
+                xout[i] = 0.f;
+        }
+        // columns (n)
+        for (int k=0; k < n; k++) {
+                // size is d
+                // vector is stride of w + (i*n), so the increment is n
+                // alpha is x increment 1
+                cblas_saxpy(d,x[k],w+k,n,xout,1);
+        }
+}
+
+void axpy_matmul(float* xout, float* x, float* w, int n, int d) {
+        // W (d,n) @ x (n,) -> xout (d,)
+
+        // columns (n)
+        for (int k=0; k < n; k++) {
+                // size is d
+                // vector is stride of w + (i*n), so the increment is n
+                // alpha is x increment 1
+                for (int i=0; i<d; i++) {
+                        xout[i] = x[k] * w[i*n+k]+ xout[i];
+                }
+        }
+}
+
+void orig_matmul(float* xout, float* x, float* w, int n, int d) {
     // W (d,n) @ x (n,) -> xout (d,)
     // by far the most amount of time is spent inside this little function
     int i;
-#pragma omp parallel for private(i)
     for (i = 0; i < d; i++) {
         float val = 0.0f;
         for (int j = 0; j < n; j++) {
             val += w[i * n + j] * x[j];
         }
         xout[i] = val;
+    }
+}
+
+void matmul(float* xout, float* x, float* w, int n, int d) {
+        // W (d,n) @ x (n,) -> xout (d,)
+        // by far the most amount of time is spent inside this little function
+        int i,j;
+
+        // manually unrolled loop
+
+        assert(n % 16 == 0);
+
+        // rows (d)
+        for (i = 0; i < d; i++) {
+                float val = 0.0f;
+                float val1 = 0.0f;
+                float val2 = 0.0f;
+                float val3 = 0.0f;
+                float val4 = 0.0f;
+                float val5 = 0.0f;
+                float val6 = 0.0f;
+                float val7 = 0.0f;
+                float val8 = 0.0f;
+                float val9 = 0.0f;
+                float val10 = 0.0f;
+                float val11 = 0.0f;
+                float val12 = 0.0f;
+                float val13 = 0.0f;
+                float val14 = 0.0f;
+                float val15 = 0.0f;
+                // columns(n)
+                for (j = 0; j <= n-16; j+=16) {
+                        // printf("cols %d to +8\n", j);
+                        val += w[i*n+j] * x[j];
+                        val1 += w[i*n+(j+1)] * x[j+1];
+                        val2 += w[i*n+(j+2)] * x[j+2];
+                        val3 += w[i*n+(j+3)] * x[j+3];
+                        val4 += w[i*n+(j+4)] * x[j+4];
+                        val5 += w[i*n+(j+5)] * x[j+5];
+                        val6 += w[i*n+(j+6)] * x[j+6];
+                        val7 += w[i*n+(j+7)] * x[j+7];
+                        val1 += w[i*n+(j+8)] * x[j+8];
+                        val2 += w[i*n+(j+9)] * x[j+9];
+                        val3 += w[i*n+(j+10)] * x[j+10];
+                        val4 += w[i*n+(j+11)] * x[j+11];
+                        val5 += w[i*n+(j+12)] * x[j+12];
+                        val6 += w[i*n+(j+13)] * x[j+13];
+                        val7 += w[i*n+(j+14)] * x[j+14];
+                        val7 += w[i*n+(j+15)] * x[j+15];
+                }
+                xout[i] = val + val1 + val2 + val3 + val4 + val5 + val6 + val7 + val8  + val9  + val10  + val11  + val12  + val13  + val14  + val15;
+        }
+
+}
+
+
+void comp_matmul(float* xout, float* x, float* w, int n, int d) {
+    // W (d,n) @ x (n,) -> xout (d,)
+
+        printf("matmul w (%d x %d) * x (%d)\n", d, n, d);
+
+        clock_t t0, t1;
+        //
+        // next experiment
+        //
+        for (int i=0; i< d ; i++) {
+                xout[i] = 0.f;
+        }
+
+        t0 = clock();
+        dot_matmul(xout, x, w, n, d);
+        t1 = clock();
+
+        for (int i=0; i<d; i = i + 256){
+                printf("xout[%d]: %f\n", i, xout[i]);
+        }
+
+        printf("Time for dot_matmul: %f sec.\n",(double)(t1-t0)/CLOCKS_PER_SEC);
+
+        //
+        // next experiment
+        //
+        for (int i=0; i< d ; i++) {
+                xout[i] = 0.f;
+        }
+
+        t0 = clock();
+        axpy_blas_matmul(xout, x, w, n, d);
+        t1 = clock();
+        for (int i=0; i<d; i = i + 256){
+                printf("xout[%d]: %f\n", i, xout[i]);
+        }
+
+        printf("Time for axpy_blas_matmul: %f sec.\n",(double)(t1-t0)/CLOCKS_PER_SEC);
+
+        //
+        // next experiment
+        //
+        for (int i=0; i< d ; i++) {
+                xout[i] = 0.f;
+        }
+
+        t0 = clock();
+        axpy_matmul(xout, x, w, n, d);
+        t1 = clock();
+        for (int i=0; i<d; i = i + 256){
+                printf("xout[%d]: %f\n", i, xout[i]);
+        }
+
+        printf("Time for axpy_matmul: %f sec.\n",(double)(t1-t0)/CLOCKS_PER_SEC);
+
+        //
+        // next experiment
+        //
+        for (int i=0; i< d ; i++) {
+                xout[i] = 0.f;
+        }
+
+        t0 = clock();
+        orig_matmul(xout, x, w, n, d);
+        t1 = clock();
+        for (int i=0; i<d; i = i + 256){
+                printf("xout[%d]: %f\n", i, xout[i]);
+        }
+
+        printf("Time for orig_matmul: %f sec.\n",(double)(t1-t0)/CLOCKS_PER_SEC);
+
+}
+
+#define MIN(X, Y) (((X) < (Y)) ? (X) : (Y))
+
+void ccmatmul(float* xout, float* x, float* w, int n, int d) {
+    // W (d,n) @ x (n,) -> xout (d,)
+    // by far the most amount of time is spent inside this little function
+    int i;
+    int j;
+    int tile_if = 1;
+    int tile_jf = 1024;
+    for (int tile_i = 0 ; tile_i < d ; tile_i = tile_i + tile_if) {
+            for (i = tile_i; i < MIN(tile_i+tile_if, d); i++) {
+                    xout[i] = 0.0f;
+                    for (int tile_j = 0 ; tile_j < n ; tile_j = tile_j + tile_jf) {
+                            float v = 0.0f;
+                            for (j = tile_j; j < MIN(tile_j+tile_jf, n); j++) {
+                                    v += w[i * n + j] * x[j];
+                            }
+                            xout[i] += v;
+                    }
+            }
     }
 }
 
@@ -240,6 +468,7 @@ void transformer(int token, int pos, Config* p, RunState* s, TransformerWeights*
         rmsnorm(s->xb, x, w->rms_att_weight + l * dim, dim);
 
         // qkv matmuls for this position
+        // xout, x, w, (rows, columns)
         matmul(s->q, s->xb, w->wq + l * dim * dim, dim, dim);
         matmul(s->k, s->xb, w->wk + l * dim * dim, dim, dim);
         matmul(s->v, s->xb, w->wv + l * dim * dim, dim, dim);
@@ -507,6 +736,7 @@ int main(int argc, char* argv[]) {
         if (fread(&config, sizeof(Config), 1, file) != 1) {
             return 1;
         }
+        print_config(&config);
         // negative vocab size is hacky way of signaling unshared weights. bit yikes.
         int shared_weights = config.vocab_size > 0 ? 1 : 0;
         config.vocab_size = abs(config.vocab_size);
@@ -585,7 +815,7 @@ int main(int argc, char* argv[]) {
     int next;         // will store the next token in the sequence
     int token = 1;    // init with token 1 (=BOS), as done in Llama-2 sentencepiece tokenizer
     int pos = 0;      // position in the sequence
-    printf("<s>\n");  // explicit print the initial BOS token for stylistic symmetry reasons
+    printf("<speak>\n");  // explicit print the initial BOS token for stylistic symmetry reasons
     while (pos < steps) {
         // forward the transformer to get logits for the next token
         transformer(token, pos, &config, &state, &weights);
